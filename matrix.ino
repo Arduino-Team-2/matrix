@@ -1,61 +1,89 @@
 #include <Adafruit_NeoPixel.h>
+#include <arduinoFFT.h>
 
-#define PIN            6
-#define NUMPIXELS      (16*16)
+#define PIN                 5
+#define MIC                 A0
+#define NUMPIXELS           (8*8)
+#define SAMPLES             512
+#define INTERVALS           8
+#define MAX_AMPLITUDE       3
 
+int color_multiplier = 256 / MAX_AMPLITUDE;
+double led_step = MAX_AMPLITUDE / 8.0;
+double frequency = 0;
+
+int intervals[INTERVALS][2] = {{50, 100}, {100, 200}, {200, 400}, {400, 800}, {800, 1600}, {1600, 3200}, {3200, 6400}, {6400, 10000}};
+// int intervals[INTERVALS][2] = {{32, 64}, {64, 128}, {128, 256}, {256, 512}, {512, 1024}, {1024, 2048}, {2048, 4096}, {4096, 8192}};
+arduinoFFT FFT = arduinoFFT();
+double scaledValues[1024];
+double vReal[SAMPLES];
+double vImag[SAMPLES];
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
-struct RGB {
-    float r, g, b;
-};
-
-struct HSV {
-    float h, s, v;
-};
-
-RGB hsvToRgb(HSV hsv) {
-    float h = hsv.h, s = hsv.s, v = hsv.v;
-    float r, g, b;
-
-    int i = int(h * 6);
-    float f = h * 6 - i;
-    float p = v * (1 - s);
-    float q = v * (1 - f * s);
-    float t = v * (1 - (1 - f) * s);
-
-    switch(i % 6) {
-        case 0: r = v, g = t, b = p; break;
-        case 1: r = q, g = v, b = p; break;
-        case 2: r = p, g = v, b = t; break;
-        case 3: r = p, g = q, b = v; break;
-        case 4: r = t, g = p, b = v; break;
-        case 5: r = v, g = p, b = q; break;
+double scaleValue(double value, double minVal, double maxVal) {
+    if (minVal >= maxVal) {
+        return 0.0;
     }
-
-    RGB rgb = { r, g, b };
-    return rgb;
+    double scaledValue = (value - minVal) / (maxVal - minVal);
+    return constrain(scaledValue, 0.0, 1.0);
 }
 
 void setup() {
+  for (int i = 0; i < 1024; i++) {
+    scaledValues[i] = scaleValue(i, 0, 1023);
+  }
+  Serial.begin(9600);
+  pinMode(MIC, INPUT);
   strip.begin();
   strip.show();
+  unsigned long startTime = millis();
+  for (int i = 0; i < SAMPLES; i++) {
+    vReal[i] = scaledValues[analogRead(MIC)];
+  }
+  unsigned long endTime = millis();
+  unsigned long elapsedTime = endTime - startTime;
+  double period = static_cast<double>(elapsedTime) / SAMPLES / 1000.0;
+  frequency = 1.0 / period;
+  Serial.print("Elapsed Time: ");
+  Serial.print(elapsedTime);
+  Serial.println(" ms");
 }
 
-float hueOffset = 0;  // This will be used to shift the hues over time for animation.
-
 void loop() {
-  for (int i = 0; i < NUMPIXELS; i++) {
-    float hue = (i / (float)NUMPIXELS) + hueOffset;  // Convert pixel index to hue value
-    if (hue > 1.0) hue -= 1.0;  // Wrap hue value around
-
-    RGB col = hsvToRgb({hue, 1.0, 1.0});
-    strip.setPixelColor(i, strip.Color((uint8_t)(col.r * 10), (uint8_t)(col.g * 10), (uint8_t)(col.b * 10)));
+  for (int i = 0; i < SAMPLES; i++) {
+    vImag[i] = 0;
   }
-
+  for (int i = 0; i < SAMPLES; i++) {
+    vReal[i] = scaledValues[analogRead(MIC)];
+  }
+  FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+  FFT.Compute(vReal, vImag, SAMPLES, FFT_FORWARD);
+  FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
+  // Calculate intensity within each interval
+  double intervalIntensities[INTERVALS] = {0};
+  for (int i = 0; i < INTERVALS; i++) {
+    for (int j = int(intervals[i][0] * SAMPLES / frequency); j < int(intervals[i][1] * SAMPLES / frequency); j++) {
+      intervalIntensities[i] += vReal[j];
+    }
+  }
+  // Serial.println("Frequency Intervals:");
+  // for (int i = 0; i < INTERVALS; i++) {
+  //   Serial.print(intervals[i][0]);
+  //   Serial.print("-");
+  //   Serial.print(intervals[i][1]);
+  //   Serial.print(" Hz: ");
+  //   Serial.println(intervalIntensities[i]);
+  // }
+  for (int i = 0; i < 8; i++) {
+    int j = 0;
+    while (j < 8 && intervalIntensities[i] > led_step) {
+      strip.setPixelColor(i * 8 + j++, strip.Color(255, 0, 0));
+      intervalIntensities[i] -= led_step;
+    }
+    if (j < 8)
+      strip.setPixelColor(i * 8 + j++, strip.Color(intervalIntensities[i] * color_multiplier, 0, 0));
+    while (j < 8)
+      strip.setPixelColor(i * 8 + j++, strip.Color(0, 0, 0));
+  }
   strip.show();
-
-  hueOffset += 0.1;  // Adjust the hue shift for the next animation frame.
-  if (hueOffset > 1.0) hueOffset -= 1.0;  // Keep hueOffset between 0 and 1.
-
-  delay(50);
 }
