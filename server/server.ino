@@ -3,10 +3,57 @@
 
 #define PIN                 5
 #define NUMPIXELS           (8*8)
+#define WEBSITE_HEAD        "\
+                            <!DOCTYPE html>\n\
+                            <html lang=\"en\">\n\
+                            <head>\n\
+                              <meta charset=\"UTF-8\">\n\
+                              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
+                              <title>Button Grid</title>\n\
+                              <style>\n\
+                                body {\n\
+                                  display: flex;\n\
+                                  justify-content: center;\n\
+                                  align-items: center;\n\
+                                  height: 100vh;\n\
+                                  font-family: Helvetica;\n\
+                                  margin: 0px auto;\n\
+                                  text-align: center;\n\
+                                }\n\n\
+                                .grid-container {\n\
+                                  display: grid;\n\
+                                  grid-template-columns: repeat(8, 50px); \n\
+                                  grid-gap: 5px; \n\
+                                }\n\n\
+                                .grid-container a{\n\
+                                  padding: 10px 10px;\n\
+                                  border: none;\n\
+                                  cursor: pointer;\n\
+                                  text-decoration: none;\n\
+                                }\n\n\
+                                .buttonon{\n\
+                                  background-color: #00FF00; \n\
+                                  color: #000000; \n\
+                                  font-size: 30px; \n\
+                                }\n\n\
+                                .buttonoff{\n\
+                                  background-color: #FF0000; \n\
+                                  color: #000000; \n\
+                                  font-size: 30px; \n\
+                                }\n\n\
+                                .buttongeneral{\n\
+                                  background-color: #333333; \n\
+                                  color: #FFFFFF; \n\
+                                  font-size: 15px; \n\
+                                }\n\
+                              </style>\n\
+                            </head>"
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 bool ledState[64];
+
+bool tictactoe[64] = {0,0,1,0,0,1,0,0,0,0,1,0,0,1,0,0,1,1,1,1,1,1,1,1,0,0,1,0,0,1,0,0,0,0,1,0,0,1,0,0,1,1,1,1,1,1,1,1,0,0,1,0,0,1,0,0,0,0,1,0,0,1,0,0};
 
 const char* ssid     = "Phone max";
 const char* password = "espwebserver";
@@ -54,58 +101,87 @@ void loop(){
     previousTime = currentTime;
     while (client.connected() && currentTime - previousTime <= timeoutTime) { // loop while the client's connected
       currentTime = millis();         
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
+      if (client.available()) {
+        char c = client.read();
         header += c;
-        if (c == '\n') {                    // if the byte is a newline character
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
+        if (c == '\n') {
           if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
             client.println("HTTP/1.1 200 OK");
             client.println("Content-type:text/html");
             client.println("Connection: close");
             client.println();
             
-            int i;
-
-            for (i = 0; i < 64; i++) {
-              String onCommand = "GET /" + String(i) + "/on";
-              String offCommand = "GET /" + String(i) + "/off";
-          
-              if (header.indexOf(onCommand) >= 0) {
-                  strip.setPixelColor(i, strip.Color(255, 0, 0));
-                  ledState[i] = true;
-                  break;
-              } else if (header.indexOf(offCommand) >= 0) {
-                  strip.setPixelColor(i, strip.Color(0, 0, 0));
-                  ledState[i] = false;
-                  break;
+            if (header.indexOf("GET /reset") >= 0) {
+              for (int i = 0; i < 64; i++) {
+                strip.setPixelColor(i, strip.Color(0, 0, 0));
+                ledState[i] = false;
               }
-            }
+            } else if (header.indexOf("GET /tictactoe") >= 0) {
+              for (int c = 0; c < 3; c++) {
+                int color;
+                if (c == 0)
+                   color = strip.Color(0, 255, 0);
+                else if (c == 1)
+                  color = strip.Color(200, 128, 0);
+                else if (c == 2)
+                  color = strip.Color(255, 0, 0);
+                for (int i = 0; i < 64; i++) {
+                  if (tictactoe[i]) {
+                    strip.setPixelColor(i, color);
+                    ledState[i] = true;
+                    strip.show();
+                    delay(15);
+                  }
+                  else {
+                    strip.setPixelColor(i, strip.Color(0, 0, 0));
+                    ledState[i] = false;
+                    strip.show();
+                  }
+                }
+              }
+            } else {
+                for (int i = 0; i < 64; i++) {
+                String onCommand = "GET /" + String(i) + "/on";
+                String offCommand = "GET /" + String(i) + "/off";
 
-            strip.show();
+                if (header.indexOf(onCommand) >= 0) {
+                    strip.setPixelColor(i, strip.Color(255, 0, 0));
+                    ledState[i] = true;
+                    break;
+                } else if (header.indexOf(offCommand) >= 0) {
+                    strip.setPixelColor(i, strip.Color(0, 0, 0));
+                    ledState[i] = false;
+                    break;
+                }
+              }
+              strip.show();
+            }
             
             // Display the HTML web page
-            client.println("<!DOCTYPE html><html>");
-            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            client.println("<link rel=\"icon\" href=\"data:,\">");
-            // CSS to style the on/off buttons 
-            // Feel free to change the background-color and font-size attributes to fit your preferences
-            client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-            client.println(".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;");
-            client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
-            client.println(".button2 {background-color: #77878A;}</style></head>");
+            client.println(WEBSITE_HEAD);
             
             // Web Page Heading
-            client.println("<body><h1>ESP8266 Web Server</h1>");
-
-            for (int i = 0; i < 64; i++) {
-              client.print("<p><a href=\"/" + String(i) + "/on\"><button class=\"button\">ON</button></a>");
-              client.print("<a href=\"/" + String(i) + "/off\"><button class=\"button button2\">OFF</button></a></p>");
+            client.println("<body>");
+            String link;
+            String button;
+            client.println("<div class=\"grid-container\">");
+            for (int i = 0; i < 8; i++) {
+              for (int j = 0; j < 8; j++)
+              {
+                int ledId = i * 8 + j;
+                if (ledState[ledId]){
+                  link = String(ledId) + "/off";
+                  button = "buttonoff";
+                } else {
+                  link = String(ledId) + "/on";
+                  button = "buttonon";
+                }
+                client.println("<a class=\"" + button + "\" href=\"/" + link + "\">" + String(ledId) + "</a>");
+              }
             }
+            client.println("<a class=\"buttongeneral\" href=\"/reset\"> RST </a>");
+            client.println("<a class=\"buttongeneral\" href=\"/tictactoe\"> TTT </a>");
+            client.println("</div>");
 
             client.println("</body></html>");
             
