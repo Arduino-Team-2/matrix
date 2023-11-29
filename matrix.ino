@@ -6,7 +6,7 @@
 #define NUMPIXELS           (8*8)
 #define SAMPLES             512
 #define INTERVALS           8
-#define MAX_AMPLITUDE       3
+#define MAX_AMPLITUDE       4
 
 int color_multiplier = 256 / MAX_AMPLITUDE;
 double led_step = MAX_AMPLITUDE / 8.0;
@@ -19,6 +19,16 @@ double scaledValues[1024];
 double vReal[SAMPLES];
 double vImag[SAMPLES];
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+int freqColors[8][3] = {
+    {0, 0, 255},
+    {36, 0, 219},
+    {73, 0, 182},
+    {109, 0, 146},
+    {146, 0, 109},
+    {182, 0, 73},
+    {219, 0, 36},
+    {255, 0, 0},
+};
 
 double scaleValue(double value, double minVal, double maxVal) {
     if (minVal >= maxVal) {
@@ -77,11 +87,11 @@ void loop() {
   for (int i = 0; i < 8; i++) {
     int j = 0;
     while (j < 8 && intervalIntensities[i] > led_step) {
-      strip.setPixelColor(i * 8 + j++, strip.Color(255, 0, 0));
+      strip.setPixelColor(i * 8 + j++, strip.Color(freqColors[i][0], freqColors[i][1], freqColors[i][2]));
       intervalIntensities[i] -= led_step;
     }
     if (j < 8)
-      strip.setPixelColor(i * 8 + j++, strip.Color(intervalIntensities[i] * color_multiplier, 0, 0));
+      strip.setPixelColor(i * 8 + j++, strip.Color(freqColors[i][0], freqColors[i][1], freqColors[i][2]));
     while (j < 8)
       strip.setPixelColor(i * 8 + j++, strip.Color(0, 0, 0));
   }
