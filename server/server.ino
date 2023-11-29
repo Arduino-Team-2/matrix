@@ -1,4 +1,3 @@
-// Load Wi-Fi library
 #include <Adafruit_NeoPixel.h>
 #include <ESP8266WiFi.h>
 
@@ -9,14 +8,11 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800
 
 bool ledState[64];
 
-// Replace with your network credentials
-const char* ssid     = "REPLACE_WITH_YOUR_SSID";
-const char* password = "REPLACE_WITH_YOUR_PASSWORD";
+const char* ssid     = "Phone max";
+const char* password = "espwebserver";
 
-// Set web server port number to 80
 WiFiServer server(80);
 
-// Variable to store the HTTP request
 String header;
 
 // Current time
@@ -29,12 +25,10 @@ const long timeoutTime = 2000;
 void setup() {
   Serial.begin(9600);
 
-  strip.begin();
-  strip.show();
-
   // Connect to Wi-Fi network with SSID and password
   Serial.print("Connecting to ");
   Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -46,14 +40,16 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   server.begin();
+  strip.begin();
+  strip.show();
 }
 
 void loop(){
-  WiFiClient client = server.available();   // Listen for incoming clients
+  WiFiClient client = server.available();
 
-  if (client) {                             // If a new client connects,
-    Serial.println("New Client.");          // print a message out in the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
+  if (client) {
+    Serial.println("New Client.");
+    String currentLine = "";
     currentTime = millis();
     previousTime = currentTime;
     while (client.connected() && currentTime - previousTime <= timeoutTime) { // loop while the client's connected
@@ -73,8 +69,9 @@ void loop(){
             client.println("Connection: close");
             client.println();
             
-            // turns the GPIOs on and off
-            for (int i = 0; i < 64; i++) {
+            int i;
+
+            for (i = 0; i < 64; i++) {
               String onCommand = "GET /" + String(i) + "/on";
               String offCommand = "GET /" + String(i) + "/off";
           
@@ -88,6 +85,8 @@ void loop(){
                   break;
               }
             }
+
+            strip.show();
             
             // Display the HTML web page
             client.println("<!DOCTYPE html><html>");
@@ -102,39 +101,27 @@ void loop(){
             
             // Web Page Heading
             client.println("<body><h1>ESP8266 Web Server</h1>");
-            
-            // If the output5State is off, it displays the ON button       
-            if (output5State=="off") {
-              client.println("<p><a href=\"/5/on\"><button class=\"button\">ON</button></a></p>");
-            } else {
-              client.println("<p><a href=\"/5/off\"><button class=\"button button2\">OFF</button></a></p>");
-            } 
-               
-            // Display current state, and ON/OFF buttons for GPIO 4  
-            client.println("<p>GPIO 4 - State " + output4State + "</p>");
-            // If the output4State is off, it displays the ON button       
-            if (output4State=="off") {
-              client.println("<p><a href=\"/4/on\"><button class=\"button\">ON</button></a></p>");
-            } else {
-              client.println("<p><a href=\"/4/off\"><button class=\"button button2\">OFF</button></a></p>");
+
+            for (int i = 0; i < 64; i++) {
+              client.print("<p><a href=\"/" + String(i) + "/on\"><button class=\"button\">ON</button></a>");
+              client.print("<a href=\"/" + String(i) + "/off\"><button class=\"button button2\">OFF</button></a></p>");
             }
+
             client.println("</body></html>");
             
             // The HTTP response ends with another blank line
             client.println();
             // Break out of the while loop
             break;
-          } else { // if you got a newline, then clear currentLine
+          } else {
             currentLine = "";
           }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
+        } else if (c != '\r') {
+          currentLine += c;
         }
       }
     }
-    // Clear the header variable
     header = "";
-    // Close the connection
     client.stop();
     Serial.println("Client disconnected.");
     Serial.println("");
