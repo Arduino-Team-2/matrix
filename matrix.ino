@@ -6,10 +6,7 @@
 #define NUMPIXELS           (8*8)
 #define SAMPLES             512
 #define INTERVALS           8
-#define MAX_AMPLITUDE       4
 
-int color_multiplier = 256 / MAX_AMPLITUDE;
-double led_step = MAX_AMPLITUDE / 8.0;
 double frequency = 0;
 
 int intervals[INTERVALS][2] = {{50, 100}, {100, 200}, {200, 400}, {400, 800}, {800, 1600}, {1600, 3200}, {3200, 6400}, {6400, 10000}};
@@ -28,6 +25,17 @@ int freqColors[8][3] = {
     {182, 0, 73},
     {219, 0, 36},
     {255, 0, 0},
+};
+
+double scale[8][8] = {
+  {0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8},
+  {0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8},
+  {0.125, 0.25, 0.5, 1, 2, 4, 8, 16},
+  {0.125, 0.25, 0.5, 1, 2, 4, 8, 16},
+  {0.25, 0.5, 1, 2, 4, 8, 16, 32},
+  {0.25, 0.5, 1, 2, 4, 8, 16, 32},
+  {0.5, 1, 2, 4, 8, 16, 32, 64},
+  {0.5, 1, 2, 4, 8, 16, 32, 64}
 };
 
 double scaleValue(double value, double minVal, double maxVal) {
@@ -86,12 +94,13 @@ void loop() {
   // }
   for (int i = 0; i < 8; i++) {
     int j = 0;
-    while (j < 8 && intervalIntensities[i] > led_step) {
-      strip.setPixelColor(i * 8 + j++, strip.Color(freqColors[i][0], freqColors[i][1], freqColors[i][2]));
-      intervalIntensities[i] -= led_step;
+    while (j < 8 && intervalIntensities[i] > scale[i][j]) {
+      strip.setPixelColor(i * 8 + j++, strip.Color(freqColors[i][0], 0, freqColors[i][2]));
     }
-    if (j < 8)
-      strip.setPixelColor(i * 8 + j++, strip.Color(freqColors[i][0], freqColors[i][1], freqColors[i][2]));
+    if (j < 7) {
+      double tmp = intervalIntensities[i] / scale[i][j + 1];
+      strip.setPixelColor(i * 8 + j++, strip.Color(freqColors[i][0] * tmp, 0, freqColors[i][2] * tmp));
+    }
     while (j < 8)
       strip.setPixelColor(i * 8 + j++, strip.Color(0, 0, 0));
   }
